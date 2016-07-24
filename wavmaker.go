@@ -125,7 +125,7 @@ func Load(filename string) (WAV, error) {
 	return wav, nil
 }
 
-func NewWAV(frames uint32) WAV {
+func New(frames uint32) WAV {
 
 	var wav WAV
 
@@ -147,7 +147,7 @@ func NewWAV(frames uint32) WAV {
 	return wav
 }
 
-func CopyWAV(wav WAV) WAV {
+func Copy(wav WAV) WAV {
 
 	var new_wav WAV
 
@@ -158,6 +158,45 @@ func CopyWAV(wav WAV) WAV {
 
 	if wav_error(wav) != nil {
 		panic("newly copied WAV was not valid")
+	}
+
+	return new_wav
+}
+
+func (original WAV) Stretched(new_frame_count uint32) WAV {
+
+	// FIXME (work in progress): currently a very crude approximation of what
+	// this should actually do - it's not even a valid linear interpolation yet.
+
+	var left, right int16
+
+	new_wav := New(new_frame_count)
+
+	if new_frame_count == 0 {
+		return new_wav
+	}
+
+	old_frame_count := original.FrameCount()
+
+	left, right = original.Get(0)
+	new_wav.Set(0, left, right)
+
+	left, right = original.Get(new_frame_count - 1)
+	new_wav.Set(new_frame_count - 1, left, right)
+
+	for n := uint32(1) ; n < new_frame_count - 1 ; n++ {
+
+		fraction := float64(n) / float64(new_frame_count)
+
+		old_sample_before := uint32(float64(old_frame_count) * fraction)
+
+		old_val_left_before, old_val_right_before := original.Get(old_sample_before)
+		old_val_left_after, old_val_right_after := original.Get(old_sample_before + 1)
+
+		new_val_left := (int32(old_val_left_before) + int32(old_val_left_after)) / 2
+		new_val_right := (int32(old_val_right_before) + int32(old_val_right_after)) / 2
+
+		new_wav.Set(n, int16(new_val_left), int16(new_val_right))
 	}
 
 	return new_wav
@@ -313,6 +352,14 @@ func convert_wav(wav WAV, filename string) (WAV, error) {
 
 		wav.DataChunk.Data = new_data
 		wav.DataChunk.Size *= 2
+	}
+
+	if wav.FmtChunk.SampleRate != PREFERRED_FREQ {
+
+		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz...\n", filename, PREFERRED_FREQ)
+
+		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
+		wav = wav.Stretched(new_frame_count)
 	}
 
 	err := wav_error(wav)
