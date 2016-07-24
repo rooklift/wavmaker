@@ -32,6 +32,11 @@ type DataChunk_Struct struct {
 
 // -------------------------------------
 
+var have_warned_get_out_of_bounds bool = false
+var have_warned_set_out_of_bounds bool = false
+
+// -------------------------------------
+
 func Load(filename string) (WAV, error) {
 
 	var infile *os.File
@@ -263,6 +268,10 @@ func (wav WAV) Set(frame uint32, left, right int16) {
 	// Assumes the wav is 16-bit stereo
 
 	if frame >= wav.DataChunk.Size / 4 {
+		if have_warned_set_out_of_bounds == false {
+			have_warned_set_out_of_bounds = true
+			fmt.Fprintf(os.Stderr, "Warning: out of bounds Set(). No further such warnings shall be given.\n")
+		}
 		return
 	}
 
@@ -282,6 +291,10 @@ func (wav WAV) Get(frame uint32) (int16, int16) {
 	// Assumes the wav is 16-bit stereo
 
 	if frame >= wav.DataChunk.Size / 4 {
+		if have_warned_get_out_of_bounds == false {
+			have_warned_get_out_of_bounds = true
+			fmt.Fprintf(os.Stderr, "Warning: out of bounds Get(). No further such warnings shall be given.\n")
+		}
 		return 0, 0
 	}
 
