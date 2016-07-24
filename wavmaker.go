@@ -147,7 +147,7 @@ func New(frames uint32) WAV {
 	return wav
 }
 
-func Copy(wav WAV) WAV {
+func (wav WAV) Copy() WAV {
 
 	var new_wav WAV
 
@@ -165,8 +165,12 @@ func Copy(wav WAV) WAV {
 
 func (original WAV) Stretched(new_frame_count uint32) WAV {
 
-	// FIXME (work in progress): currently a very crude approximation of what
-	// this should actually do - it's not even a valid linear interpolation yet.
+	// This uses linear interpolation to do the stretching or
+	// squashing, which sound techies don't recommend as it's lossy.
+
+	if new_frame_count == original.FrameCount() {
+		return original.Copy()
+	}
 
 	var left, right int16
 
@@ -178,25 +182,34 @@ func (original WAV) Stretched(new_frame_count uint32) WAV {
 
 	old_frame_count := original.FrameCount()
 
+	// Set the first and final frames to match the source...
+
 	left, right = original.Get(0)
 	new_wav.Set(0, left, right)
 
 	left, right = original.Get(new_frame_count - 1)
 	new_wav.Set(new_frame_count - 1, left, right)
 
-	for n := uint32(1) ; n < new_frame_count - 1 ; n++ {
+	for n := uint32(1) ; n <= new_frame_count - 2 ; n++ {
 
-		fraction := float64(n) / float64(new_frame_count)
+		index_f := float64(n) / float64(new_frame_count - 1) * float64(old_frame_count - 1)
+		index := uint32(index_f)
 
-		old_sample_before := uint32(float64(old_frame_count) * fraction)
+		interpolate_fraction := index_f - float64(index)
 
-		old_val_left_before, old_val_right_before := original.Get(old_sample_before)
-		old_val_left_after, old_val_right_after := original.Get(old_sample_before + 1)
+		old_val_left,      old_val_right      := original.Get(index)
+		old_val_left_next, old_val_right_next := original.Get(index + 1)
 
-		new_val_left := (int32(old_val_left_before) + int32(old_val_left_after)) / 2
-		new_val_right := (int32(old_val_right_before) + int32(old_val_right_after)) / 2
+		diff_left  := old_val_left_next  - old_val_left
+		diff_right := old_val_right_next - old_val_right
 
-		new_wav.Set(n, int16(new_val_left), int16(new_val_right))
+		new_val_left_f  := float64(old_val_left)  + float64(diff_left)  * interpolate_fraction
+		new_val_right_f := float64(old_val_right) + float64(diff_right) * interpolate_fraction
+
+		new_val_left  := int16(new_val_left_f)
+		new_val_right := int16(new_val_right_f)
+
+		new_wav.Set(n, new_val_left, new_val_right)
 	}
 
 	return new_wav
@@ -356,9 +369,9 @@ func convert_wav(wav WAV, filename string) (WAV, error) {
 
 	if wav.FmtChunk.SampleRate != PREFERRED_FREQ {
 
-		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz...\n", filename, PREFERRED_FREQ)
-
 		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
+		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz ", filename, PREFERRED_FREQ)
+		fmt.Fprintf(os.Stderr, " (%d -> %d frames)...\n", wav.FrameCount(), new_frame_count)
 		wav = wav.Stretched(new_frame_count)
 	}
 
