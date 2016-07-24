@@ -177,24 +177,20 @@ func (original WAV) Stretched(new_frame_count uint32) WAV {
 		return original.Copy()
 	}
 
-	var left, right int16
-
 	new_wav := New(new_frame_count)
 
 	if new_frame_count == 0 {
 		return new_wav
 	}
 
-	old_frame_count := original.FrameCount()
-
 	// Set the final frame directly...
 
-	left, right = original.Get(old_frame_count - 1)
+	left, right := original.Get(original.FrameCount() - 1)
 	new_wav.Set(new_frame_count - 1, left, right)
 
 	for n := uint32(0) ; n <= new_frame_count - 2 ; n++ {
 
-		index_f := float64(n) / float64(new_frame_count - 1) * float64(old_frame_count - 1)
+		index_f := float64(n) / float64(new_frame_count - 1) * float64(original.FrameCount() - 1)
 		index := uint32(index_f)
 
 		interpolate_fraction := index_f - float64(index)
