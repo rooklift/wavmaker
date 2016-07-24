@@ -213,7 +213,7 @@ func (wav WAV) Set(frame uint32, left, right int16) {
 
 	// Assumes the wav is 16-bit stereo
 
-	if frame < 0 || frame >= wav.DataChunk.Size / 4 {
+	if frame >= wav.DataChunk.Size / 4 {
 		return
 	}
 
@@ -232,7 +232,7 @@ func (wav WAV) Get(frame uint32) (int16, int16) {
 
 	// Assumes the wav is 16-bit stereo
 
-	if frame < 0 || frame >= wav.DataChunk.Size / 4 {
+	if frame >= wav.DataChunk.Size / 4 {
 		return 0, 0
 	}
 
