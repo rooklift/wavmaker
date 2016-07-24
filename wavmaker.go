@@ -32,7 +32,7 @@ type DataChunk_Struct struct {
 
 // -------------------------------------
 
-func LoadWAV(filename string) (WAV, error) {
+func Load(filename string) (WAV, error) {
 
 	var infile *os.File
 	var err error
@@ -125,7 +125,7 @@ func LoadWAV(filename string) (WAV, error) {
 	return wav, nil
 }
 
-func NewWAV(frames int) WAV {
+func NewWAV(frames uint32) WAV {
 
 	var wav WAV
 
@@ -133,11 +133,11 @@ func NewWAV(frames int) WAV {
 	wav.FmtChunk.AudioFormat = 1
 	wav.FmtChunk.NumChannels = 2
 	wav.FmtChunk.SampleRate = PREFERRED_FREQ
-	wav.FmtChunk.ByteRate = 176400
+	wav.FmtChunk.ByteRate = PREFERRED_FREQ * 4		// Bytes per second; we are using 4 bytes per frame
 	wav.FmtChunk.BlockAlign = 4
 	wav.FmtChunk.BitsPerSample = 16
 
-	wav.DataChunk.Size = uint32(wav.FmtChunk.BitsPerSample / 8) * uint32(frames) * uint32(wav.FmtChunk.NumChannels)
+	wav.DataChunk.Size = uint32(wav.FmtChunk.BitsPerSample / 8) * frames * uint32(wav.FmtChunk.NumChannels)
 	wav.DataChunk.Data = make([]byte, wav.DataChunk.Size)
 
 	if wav_error(wav) != nil {
@@ -161,6 +161,10 @@ func CopyWAV(wav WAV) WAV {
 	}
 
 	return new_wav
+}
+
+func (wav WAV) FrameCount() uint32 {
+	return wav.DataChunk.Size / uint32(wav.FmtChunk.BlockAlign)
 }
 
 func (wav WAV) Save(filename string) error {
@@ -199,32 +203,50 @@ func (wav WAV) Save(filename string) error {
 
 	err = wav_error(wav)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: while saving, wav_error() said %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: while saving, sanity check failed: %v\n", err)
 	}
 
 	return nil
 }
 
-func (wav WAV) Set(frame, left, right int) {
+func (wav WAV) Set(frame uint32, left, right int16) {
 
 	// Assumes the wav is 16-bit stereo
 
-	if frame < 0 || frame >= int(wav.DataChunk.Size) / 4 {
+	if frame < 0 || frame >= wav.DataChunk.Size / 4 {
 		return
 	}
-
-	if left  < -32768 { left  = -32768 } else if left  > 32767 { left  = 32767 }
-	if right < -32768 { right = -32768 } else if right > 32767 { right = 32767 }
 
 	n := frame * 4
 
 	// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
 
-	wav.DataChunk.Data[n] = uint8(left & 0xff)			// The less-significant bytes
-	wav.DataChunk.Data[n + 1] = uint8(left >> 8)		// The more-significant bytes
+	wav.DataChunk.Data[n] = byte(left & 0xff)			// The less-significant bytes
+	wav.DataChunk.Data[n + 1] = byte(left >> 8)			// The more-significant bytes
 
-	wav.DataChunk.Data[n + 2] = uint8(right & 0xff)		// The less-significant bytes
-	wav.DataChunk.Data[n + 3] = uint8(right >> 8)		// The more-significant bytes
+	wav.DataChunk.Data[n + 2] = byte(right & 0xff)		// The less-significant bytes
+	wav.DataChunk.Data[n + 3] = byte(right >> 8)		// The more-significant bytes
+}
+
+func (wav WAV) Get(frame uint32) (int16, int16) {
+
+	// Assumes the wav is 16-bit stereo
+
+	if frame < 0 || frame >= wav.DataChunk.Size / 4 {
+		return 0, 0
+	}
+
+	n := frame * 4
+
+	// One wonders about the performance of the following, in C we could do some trivial casts and such...
+
+	left := binary.LittleEndian.Uint16(wav.DataChunk.Data[n : n + 2])
+	right := binary.LittleEndian.Uint16(wav.DataChunk.Data[n + 2: n + 4])
+
+	// So we have read left and right as if they were unsigned (because that's the only thing allowed),
+	// but in fact they are signed, so return the correct things...
+
+	return int16(left), int16(right)
 }
 
 // -------------------------------------
@@ -254,8 +276,8 @@ func convert_wav(wav WAV, filename string) (WAV, error) {
 
 			// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
 
-			new_data[n * 2] = uint8(new_val & 0xff)			// The less-significant bytes
-			new_data[n * 2 + 1] = uint8(new_val >> 8)		// The more-significant bytes
+			new_data[n * 2] = byte(new_val & 0xff)			// The less-significant bytes
+			new_data[n * 2 + 1] = byte(new_val >> 8)		// The more-significant bytes
 		}
 
 		wav.FmtChunk.BitsPerSample = 16
