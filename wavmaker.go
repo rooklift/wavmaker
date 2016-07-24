@@ -190,7 +190,7 @@ func (original WAV) Stretched(new_frame_count uint32) WAV {
 
 	for n := uint32(0) ; n <= new_frame_count - 2 ; n++ {
 
-		index_f := float64(n) / float64(new_frame_count - 1) * float64(original.FrameCount() - 1)
+		index_f := (float64(n) / float64(new_frame_count - 1)) * float64(original.FrameCount() - 1)
 		index := uint32(index_f)
 
 		interpolate_fraction := index_f - float64(index)
@@ -253,7 +253,7 @@ func (wav WAV) Save(filename string) error {
 
 	err = wav_error(wav)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: while saving, sanity check failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: while saving '%s', sanity check failed: %v\n", filename, err)
 	}
 
 	return nil
