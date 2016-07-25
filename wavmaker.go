@@ -37,121 +37,6 @@ var have_warned_set_out_of_bounds bool = false
 
 // -------------------------------------
 
-func Load(filename string) (WAV, error) {
-
-	var infile *os.File
-	var err error
-	var buf [4]byte
-	var wav WAV
-	var got_fmt, got_data bool
-
-	infile, err = os.Open(filename)
-	if err != nil {
-		if infile != nil {
-			infile.Close()
-		}
-		return wav, fmt.Errorf("load_wav() couldn't load '%s': %v", filename, err)
-	}
-
-	defer infile.Close()
-
-	// --------------------
-
-	err = binary.Read(infile, binary.LittleEndian, &buf)
-	if err != nil {
-		return wav, fmt.Errorf("load_wav() couldn't read RIFF bytes: %v", err)
-	}
-	if buf != [4]byte{'R', 'I', 'F', 'F'} {
-		return wav, fmt.Errorf("load_wav() found bytes 0-3 != RIFF")
-	}
-
-	// --------------------
-
-	var totalsize uint32
-
-	err = binary.Read(infile, binary.LittleEndian, &totalsize)
-	if err != nil {
-		return wav, fmt.Errorf("load_wav() couldn't read total file size: %v", err)
-	}
-
-	// --------------------
-
-	err = binary.Read(infile, binary.LittleEndian, &buf)
-	if err != nil {
-		return wav, fmt.Errorf("load_wav() couldn't read WAVE bytes: %v", err)
-	}
-	if buf != [4]byte{'W', 'A', 'V', 'E'} {
-		return wav, fmt.Errorf("load_wav() found bytes 8-11 != WAVE")
-	}
-
-	// --------------------
-
-	for {
-
-		err = binary.Read(infile, binary.LittleEndian, &buf)
-		if err != nil {
-			return wav, fmt.Errorf("load_wav() couldn't read chunk's starting bytes: %v", err)
-		}
-
-		if buf == [4]byte{'f', 'm', 't', ' '} {
-			wav.FmtChunk, err = load_fmt(infile)
-			if err != nil {
-				return wav, err
-			}
-			got_fmt = true
-		} else if buf == [4]byte{'d', 'a', 't', 'a'} {
-			wav.DataChunk, err = load_data(infile)
-			if err != nil {
-				return wav, err
-			}
-			got_data = true
-		} else {
-			err = skip_chunk(infile, buf)
-			if err != nil {
-				return wav, err
-			}
-		}
-
-		if got_fmt && got_data {
-			break
-		}
-	}
-
-	err = wav_error(wav)
-	if err != nil {
-		return wav, err
-	}
-
-	wav, err = convert_wav(wav, filename)
-	if err != nil {
-		return wav, err
-	}
-
-	return wav, nil
-}
-
-func New(frames uint32) WAV {
-
-	var wav WAV
-
-	wav.FmtChunk.Size = 16
-	wav.FmtChunk.AudioFormat = 1
-	wav.FmtChunk.NumChannels = 2
-	wav.FmtChunk.SampleRate = PREFERRED_FREQ
-	wav.FmtChunk.ByteRate = PREFERRED_FREQ * 4		// Bytes per second; we are using 4 bytes per frame
-	wav.FmtChunk.BlockAlign = 4
-	wav.FmtChunk.BitsPerSample = 16
-
-	wav.DataChunk.Size = uint32(wav.FmtChunk.BitsPerSample / 8) * frames * uint32(wav.FmtChunk.NumChannels)
-	wav.DataChunk.Data = make([]byte, wav.DataChunk.Size)
-
-	if wav_error(wav) != nil {
-		panic("failed to create a valid WAV")
-	}
-
-	return wav
-}
-
 func (wav WAV) Copy() WAV {
 
 	var new_wav WAV
@@ -300,6 +185,123 @@ func (wav WAV) Get(frame uint32) (int16, int16) {
 	right := int16(wav.DataChunk.Data[n + 2]) | (int16(wav.DataChunk.Data[n + 3]) << 8)
 
 	return left, right
+}
+
+// -------------------------------------
+
+func Load(filename string) (WAV, error) {
+
+	var infile *os.File
+	var err error
+	var buf [4]byte
+	var wav WAV
+	var got_fmt, got_data bool
+
+	infile, err = os.Open(filename)
+	if err != nil {
+		if infile != nil {
+			infile.Close()
+		}
+		return wav, fmt.Errorf("load_wav() couldn't load '%s': %v", filename, err)
+	}
+
+	defer infile.Close()
+
+	// --------------------
+
+	err = binary.Read(infile, binary.LittleEndian, &buf)
+	if err != nil {
+		return wav, fmt.Errorf("load_wav() couldn't read RIFF bytes: %v", err)
+	}
+	if buf != [4]byte{'R', 'I', 'F', 'F'} {
+		return wav, fmt.Errorf("load_wav() found bytes 0-3 != RIFF")
+	}
+
+	// --------------------
+
+	var totalsize uint32
+
+	err = binary.Read(infile, binary.LittleEndian, &totalsize)
+	if err != nil {
+		return wav, fmt.Errorf("load_wav() couldn't read total file size: %v", err)
+	}
+
+	// --------------------
+
+	err = binary.Read(infile, binary.LittleEndian, &buf)
+	if err != nil {
+		return wav, fmt.Errorf("load_wav() couldn't read WAVE bytes: %v", err)
+	}
+	if buf != [4]byte{'W', 'A', 'V', 'E'} {
+		return wav, fmt.Errorf("load_wav() found bytes 8-11 != WAVE")
+	}
+
+	// --------------------
+
+	for {
+
+		err = binary.Read(infile, binary.LittleEndian, &buf)
+		if err != nil {
+			return wav, fmt.Errorf("load_wav() couldn't read chunk's starting bytes: %v", err)
+		}
+
+		if buf == [4]byte{'f', 'm', 't', ' '} {
+			wav.FmtChunk, err = load_fmt(infile)
+			if err != nil {
+				return wav, err
+			}
+			got_fmt = true
+		} else if buf == [4]byte{'d', 'a', 't', 'a'} {
+			wav.DataChunk, err = load_data(infile)
+			if err != nil {
+				return wav, err
+			}
+			got_data = true
+		} else {
+			err = skip_chunk(infile, buf)
+			if err != nil {
+				return wav, err
+			}
+		}
+
+		if got_fmt && got_data {
+			break
+		}
+	}
+
+	err = wav_error(wav)
+	if err != nil {
+		return wav, err
+	}
+
+	wav, err = convert_wav(wav, filename)
+	if err != nil {
+		return wav, err
+	}
+
+	return wav, nil
+}
+
+func New(frames uint32) WAV {
+
+	var wav WAV
+
+	wav.FmtChunk.Size = 16
+	wav.FmtChunk.AudioFormat = 1
+	wav.FmtChunk.NumChannels = 2
+	wav.FmtChunk.SampleRate = PREFERRED_FREQ
+	wav.FmtChunk.ByteRate = PREFERRED_FREQ * 4		// Bytes per second; we are using 4 bytes per frame
+	wav.FmtChunk.BlockAlign = 4
+	wav.FmtChunk.BitsPerSample = 16
+
+	wav.DataChunk.Size = uint32(wav.FmtChunk.BitsPerSample / 8) * frames * uint32(wav.FmtChunk.NumChannels)
+	wav.DataChunk.Data = make([]byte, wav.DataChunk.Size)
+
+	if wav_error(wav) != nil {
+		panic("failed to create a valid WAV")
+	}
+
+	return wav
 }
 
 // -------------------------------------
