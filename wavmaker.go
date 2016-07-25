@@ -98,6 +98,16 @@ func (original WAV) Stretched(new_frame_count uint32) WAV {
 	return new_wav
 }
 
+func (wav WAV) StretchedRelative(multiplier float64) WAV {
+
+	old_framecount_f := float64(wav.FrameCount())
+	new_framecount_f := old_framecount_f * multiplier
+
+	new_framecount := uint32(new_framecount_f)
+
+	return wav.Stretched(new_framecount)
+}
+
 func (wav WAV) FrameCount() uint32 {
 	return wav.DataChunk.Size / uint32(wav.FmtChunk.BlockAlign)
 }
@@ -183,6 +193,46 @@ func (wav WAV) Get(frame uint32) (int16, int16) {
 	right := int16(wav.DataChunk.Data[n + 2]) | (int16(wav.DataChunk.Data[n + 3]) << 8)
 
 	return left, right
+}
+
+func (target WAV) Add(t_loc uint32, source WAV, s_loc uint32, frames uint32) {
+
+	t := t_loc
+	s := s_loc
+	frames_added := uint32(0)
+
+	for {
+		if t >= target.FrameCount() {
+			break
+		}
+		if s >= source.FrameCount() {
+			break
+		}
+
+		target_left, target_right := target.Get(t)
+		source_left, source_right := source.Get(s)
+
+		new_left_32  := int32(target_left)  + int32(source_left)
+		new_right_32 := int32(target_right) + int32(source_right)
+
+		if new_left_32  < -32768 { new_left_32  = -32768 }
+		if new_left_32  >  32767 { new_left_32  =  32767 }
+		if new_right_32 < -32768 { new_right_32 = -32768 }
+		if new_right_32 >  32767 { new_right_32 =  32767 }
+
+		new_left  := int16(new_left_32)
+		new_right := int16(new_right_32)
+
+		target.Set(t, new_left, new_right)
+
+		t++
+		s++
+
+		frames_added++
+		if frames_added >= frames {
+			break
+		}
+	}
 }
 
 // -------------------------------------
