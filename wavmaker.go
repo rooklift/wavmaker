@@ -275,7 +275,7 @@ func (wav WAV) Set(frame uint32, left, right int16) {
 
 	// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
 
-	wav.DataChunk.Data[n] = byte(left & 0xff)			// The less-significant bytes
+	wav.DataChunk.Data[n + 0] = byte(left & 0xff)		// The less-significant bytes
 	wav.DataChunk.Data[n + 1] = byte(left >> 8)			// The more-significant bytes
 
 	wav.DataChunk.Data[n + 2] = byte(right & 0xff)		// The less-significant bytes
@@ -296,13 +296,18 @@ func (wav WAV) Get(frame uint32) (int16, int16) {
 
 	n := frame * 4
 
-	// One wonders about the performance of the following, in C we could do some trivial casts and such...
+	// One wonders about the performance of the following, in C we could do some trivial casts and such.
+	// The C-like code in Golang would be:
+	//
+	// left  := *(*int16)(unsafe.Pointer(&wav.DataChunk.Data[n + 0]))
+	// right := *(*int16)(unsafe.Pointer(&wav.DataChunk.Data[n + 2]))
 
-	left := binary.LittleEndian.Uint16(wav.DataChunk.Data[n : n + 2])
-	right := binary.LittleEndian.Uint16(wav.DataChunk.Data[n + 2: n + 4])
+	left  := binary.LittleEndian.Uint16(wav.DataChunk.Data[n + 0 : n + 2])
+	right := binary.LittleEndian.Uint16(wav.DataChunk.Data[n + 2 : n + 4])
 
-	// So we have read left and right as if they were unsigned (because that's the only thing allowed),
-	// but in fact they are signed, so return the correct things...
+	// So (assuming we used the we used the binary.LittleEndian.Uint16 code) we have read left and right
+	// as if they were unsigned (because that's the only thing allowed), but in fact they are signed, so
+	// return the correct things...
 
 	return int16(left), int16(right)
 }
