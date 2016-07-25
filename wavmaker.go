@@ -8,8 +8,6 @@ import (
 
 const PREFERRED_FREQ = 44100
 
-// -------------------------------------
-
 type WAV struct {
 	FmtChunk FmtChunk_Struct
 	DataChunk DataChunk_Struct
@@ -30,124 +28,17 @@ type DataChunk_Struct struct {
 	Data []byte
 }
 
-// -------------------------------------
-
 var have_warned_get_out_of_bounds bool = false
 var have_warned_set_out_of_bounds bool = false
 
+
 // ------------------------------------- EXPOSED METHODS
 
-func (wav *WAV) Convert(filename string) (error) {		// Filename given just for printing useful info
 
-	// We want 16-bit audio:
-
-	if wav.FmtChunk.BitsPerSample != 16 {
-
-		if wav.FmtChunk.BitsPerSample != 8 {
-			return fmt.Errorf("convert_wav(): bits per sample in '%s' was not 8 or 16", filename)
-		}
-
-		fmt.Fprintf(os.Stderr, "Converting '%s' to 16 bit...\n", filename)
-
-		new_data := make([]byte, wav.DataChunk.Size * 2)
-
-		for n := uint32(0) ; n < wav.DataChunk.Size ; n++ {
-
-			old_val := int32(wav.DataChunk.Data[n])
-
-			new_val := ((old_val - 128) * 256) + old_val
-
-			// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
-
-			new_data[n * 2] = byte(new_val & 0xff)			// The less-significant bytes
-			new_data[n * 2 + 1] = byte(new_val >> 8)		// The more-significant bytes
-		}
-
-		wav.FmtChunk.BitsPerSample = 16
-
-		wav.FmtChunk.ByteRate *= 2
-		wav.FmtChunk.BlockAlign *= 2
-
-		wav.DataChunk.Data = new_data
-		wav.DataChunk.Size *= 2
-	}
-
-	// We want stereo:
-
-	if wav.FmtChunk.NumChannels == 1 {
-
-		fmt.Fprintf(os.Stderr, "Converting '%s' to stereo...\n", filename)
-
-		new_data := make([]byte, wav.DataChunk.Size * 2)
-
-		for n := uint32(0) ; n < wav.DataChunk.Size ; n += 2 {
-
-			// Things are guaranteed 16-bit at this point, so the following is right...
-
-			new_data[n * 2] = wav.DataChunk.Data[n]
-			new_data[n * 2 + 2] = wav.DataChunk.Data[n]
-
-			new_data[n * 2 + 1] = wav.DataChunk.Data[n + 1]
-			new_data[n * 2 + 3] = wav.DataChunk.Data[n + 1]
-		}
-
-		wav.FmtChunk.NumChannels = 2
-
-		wav.FmtChunk.ByteRate *= 2
-		wav.FmtChunk.BlockAlign *= 2
-
-		wav.DataChunk.Data = new_data
-		wav.DataChunk.Size *= 2
-	}
-
-	// We want 44100 Hz:
-
-	if wav.FmtChunk.SampleRate != PREFERRED_FREQ {
-
-		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
-		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz ", filename, PREFERRED_FREQ)
-		fmt.Fprintf(os.Stderr, " (%d -> %d frames)...\n", wav.FrameCount(), new_frame_count)
-		wav = wav.Stretched(new_frame_count)
-	}
-
-	// Final sanity check:
-
-	err := wav.SanityCheck()
-	if err != nil {
-		return fmt.Errorf("convert_wav(): seemed to succeed, but: %v", err)
-	}
-
-	return nil
+func (wav *WAV) FrameCount() uint32 {
+	return wav.DataChunk.Size / uint32(wav.FmtChunk.BlockAlign)
 }
 
-func (wav *WAV) SanityCheck() error {
-
-	if wav.FmtChunk.Size != 16 {
-		return fmt.Errorf("SanityCheck(): fmt chunk size != 16")
-	}
-
-	if wav.FmtChunk.AudioFormat != 1 {
-		return fmt.Errorf("SanityCheck(): audio format != 1 (PCM)")
-	}
-
-	if wav.FmtChunk.NumChannels > 2 {
-		return fmt.Errorf("SanityCheck(): num channels > 2")
-	}
-
-	if wav.FmtChunk.ByteRate != wav.FmtChunk.SampleRate * uint32(wav.FmtChunk.NumChannels) * uint32(wav.FmtChunk.BitsPerSample) / 8 {
-		return fmt.Errorf("SanityCheck(): byte rate did not match other fmt fields")
-	}
-
-	if wav.FmtChunk.BlockAlign != wav.FmtChunk.NumChannels * wav.FmtChunk.BitsPerSample / 8 {
-		return fmt.Errorf("SanityCheck(): block align did not match other fmt fields")
-	}
-
-	if wav.DataChunk.Size != uint32(len(wav.DataChunk.Data)) {
-		return fmt.Errorf("SanityCheck(): data chunk size did not match amount of data read")
-	}
-
-	return nil
-}
 
 func (wav *WAV) Copy() *WAV {
 
@@ -158,12 +49,13 @@ func (wav *WAV) Copy() *WAV {
 	new_wav.DataChunk.Data = make([]byte, len(wav.DataChunk.Data))
 	copy(new_wav.DataChunk.Data, wav.DataChunk.Data)
 
-	if wav.SanityCheck() != nil {
+	if wav.sanitycheck() != nil {
 		panic("newly copied WAV was not valid")
 	}
 
 	return &new_wav
 }
+
 
 func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 
@@ -210,6 +102,7 @@ func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 	return new_wav
 }
 
+
 func (wav *WAV) StretchedRelative(multiplier float64) *WAV {
 
 	old_framecount_f := float64(wav.FrameCount())
@@ -220,9 +113,6 @@ func (wav *WAV) StretchedRelative(multiplier float64) *WAV {
 	return wav.Stretched(new_framecount)
 }
 
-func (wav *WAV) FrameCount() uint32 {
-	return wav.DataChunk.Size / uint32(wav.FmtChunk.BlockAlign)
-}
 
 func (wav *WAV) Save(filename string) error {
 
@@ -256,13 +146,14 @@ func (wav *WAV) Save(filename string) error {
 	binary.Write(outfile, bo, &wav.DataChunk.Size)
 	binary.Write(outfile, bo, wav.DataChunk.Data)
 
-	err = wav.SanityCheck()
+	err = wav.sanitycheck()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: while saving '%s', %v\n", filename, err)
 	}
 
 	return nil
 }
+
 
 func (wav *WAV) Set(frame uint32, left, right int16) {
 
@@ -287,6 +178,7 @@ func (wav *WAV) Set(frame uint32, left, right int16) {
 	wav.DataChunk.Data[n + 3] = byte(right >> 8)		// The more-significant byte
 }
 
+
 func (wav *WAV) Get(frame uint32) (int16, int16) {
 
 	// Assumes the wav is 16-bit stereo
@@ -306,6 +198,7 @@ func (wav *WAV) Get(frame uint32) (int16, int16) {
 
 	return left, right
 }
+
 
 func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 
@@ -347,7 +240,9 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 	}
 }
 
+
 // ------------------------------------- EXPOSED FUNCTIONS
+
 
 func Load(filename string) (*WAV, error) {
 
@@ -429,18 +324,19 @@ func Load(filename string) (*WAV, error) {
 
 	// --------------------
 
-	err = wav.SanityCheck()
+	err = wav.sanitycheck()
 	if err != nil {
 		return &wav, err
 	}
 
-	err = wav.Convert(filename)
+	err = wav.convert(filename)
 	if err != nil {
 		return &wav, err
 	}
 
 	return &wav, nil
 }
+
 
 func New(frames uint32) *WAV {
 
@@ -457,14 +353,16 @@ func New(frames uint32) *WAV {
 	wav.DataChunk.Size = uint32(wav.FmtChunk.BitsPerSample / 8) * frames * uint32(wav.FmtChunk.NumChannels)
 	wav.DataChunk.Data = make([]byte, wav.DataChunk.Size)
 
-	if wav.SanityCheck() != nil {
+	if wav.sanitycheck() != nil {
 		panic("failed to create a valid WAV")
 	}
 
 	return &wav
 }
 
+
 // ------------------------------------- NON-EXPOSED FUNCTIONS
+
 
 func skip_chunk(infile *os.File, chunk_name [4]byte) error {
 
@@ -487,6 +385,7 @@ func skip_chunk(infile *os.File, chunk_name [4]byte) error {
 	return nil
 }
 
+
 func load_fmt(infile *os.File) (FmtChunk_Struct, error) {
 
 	var chunk FmtChunk_Struct
@@ -499,6 +398,7 @@ func load_fmt(infile *os.File) (FmtChunk_Struct, error) {
 
 	return chunk, nil
 }
+
 
 func load_data(infile *os.File) (DataChunk_Struct, error) {
 
@@ -519,4 +419,121 @@ func load_data(infile *os.File) (DataChunk_Struct, error) {
 	}
 
 	return chunk, nil
+}
+
+
+// ------------------------------------- NON-EXPOSED METHODS
+
+
+func (wav *WAV) convert(filename string) error {		// Filename given just for printing useful info
+
+	// We want 16-bit audio:
+
+	if wav.FmtChunk.BitsPerSample != 16 {
+
+		if wav.FmtChunk.BitsPerSample != 8 {
+			return fmt.Errorf("convert_wav(): bits per sample in '%s' was not 8 or 16", filename)
+		}
+
+		fmt.Fprintf(os.Stderr, "Converting '%s' to 16 bit...\n", filename)
+
+		new_data := make([]byte, wav.DataChunk.Size * 2)
+
+		for n := uint32(0) ; n < wav.DataChunk.Size ; n++ {
+
+			old_val := int32(wav.DataChunk.Data[n])
+
+			new_val := ((old_val - 128) * 256) + old_val
+
+			// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
+
+			new_data[n * 2] = byte(new_val & 0xff)			// The less-significant bytes
+			new_data[n * 2 + 1] = byte(new_val >> 8)		// The more-significant bytes
+		}
+
+		wav.FmtChunk.BitsPerSample = 16
+
+		wav.FmtChunk.ByteRate *= 2
+		wav.FmtChunk.BlockAlign *= 2
+
+		wav.DataChunk.Data = new_data
+		wav.DataChunk.Size *= 2
+	}
+
+	// We want stereo:
+
+	if wav.FmtChunk.NumChannels == 1 {
+
+		fmt.Fprintf(os.Stderr, "Converting '%s' to stereo...\n", filename)
+
+		new_data := make([]byte, wav.DataChunk.Size * 2)
+
+		for n := uint32(0) ; n < wav.DataChunk.Size ; n += 2 {
+
+			// Things are guaranteed 16-bit at this point, so the following is right...
+
+			new_data[n * 2] = wav.DataChunk.Data[n]
+			new_data[n * 2 + 2] = wav.DataChunk.Data[n]
+
+			new_data[n * 2 + 1] = wav.DataChunk.Data[n + 1]
+			new_data[n * 2 + 3] = wav.DataChunk.Data[n + 1]
+		}
+
+		wav.FmtChunk.NumChannels = 2
+
+		wav.FmtChunk.ByteRate *= 2
+		wav.FmtChunk.BlockAlign *= 2
+
+		wav.DataChunk.Data = new_data
+		wav.DataChunk.Size *= 2
+	}
+
+	// We want 44100 Hz:
+
+	if wav.FmtChunk.SampleRate != PREFERRED_FREQ {
+
+		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
+		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz ", filename, PREFERRED_FREQ)
+		fmt.Fprintf(os.Stderr, " (%d -> %d frames)...\n", wav.FrameCount(), new_frame_count)
+		wav = wav.Stretched(new_frame_count)
+	}
+
+	// Final sanity check:
+
+	err := wav.sanitycheck()
+	if err != nil {
+		return fmt.Errorf("convert_wav(): seemed to succeed, but: %v", err)
+	}
+
+	return nil
+}
+
+
+func (wav *WAV) sanitycheck() error {
+
+	if wav.FmtChunk.Size != 16 {
+		return fmt.Errorf("sanitycheck(): fmt chunk size != 16")
+	}
+
+	if wav.FmtChunk.AudioFormat != 1 {
+		return fmt.Errorf("sanitycheck(): audio format != 1 (PCM)")
+	}
+
+	if wav.FmtChunk.NumChannels > 2 {
+		return fmt.Errorf("sanitycheck(): num channels > 2")
+	}
+
+	if wav.FmtChunk.ByteRate != wav.FmtChunk.SampleRate * uint32(wav.FmtChunk.NumChannels) * uint32(wav.FmtChunk.BitsPerSample) / 8 {
+		return fmt.Errorf("sanitycheck(): byte rate did not match other fmt fields")
+	}
+
+	if wav.FmtChunk.BlockAlign != wav.FmtChunk.NumChannels * wav.FmtChunk.BitsPerSample / 8 {
+		return fmt.Errorf("sanitycheck(): block align did not match other fmt fields")
+	}
+
+	if wav.DataChunk.Size != uint32(len(wav.DataChunk.Data)) {
+		return fmt.Errorf("sanitycheck(): data chunk size did not match amount of data read")
+	}
+
+	return nil
 }
