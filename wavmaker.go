@@ -105,14 +105,12 @@ func (wav WAV) FrameCount() uint32 {
 func (wav WAV) Save(filename string) error {
 
 	outfile, err := os.Create(filename)
+	if outfile != nil {
+		defer outfile.Close()
+	}
     if err != nil {
-        if outfile != nil {
-            outfile.Close()
-        }
         return fmt.Errorf("Couldn't create output file '%s'", filename)
 	}
-
-	defer outfile.Close()
 
 	filesize := 36 + wav.DataChunk.Size
 
@@ -160,11 +158,11 @@ func (wav WAV) Set(frame uint32, left, right int16) {
 
 	// Reminder to self, humans and compilers think in big-endian but the storage is little-endian...
 
-	wav.DataChunk.Data[n + 0] = byte(left & 0xff)		// The less-significant bytes
-	wav.DataChunk.Data[n + 1] = byte(left >> 8)			// The more-significant bytes
+	wav.DataChunk.Data[n + 0] = byte(left & 0xff)		// The less-significant byte
+	wav.DataChunk.Data[n + 1] = byte(left >> 8)			// The more-significant byte
 
-	wav.DataChunk.Data[n + 2] = byte(right & 0xff)		// The less-significant bytes
-	wav.DataChunk.Data[n + 3] = byte(right >> 8)		// The more-significant bytes
+	wav.DataChunk.Data[n + 2] = byte(right & 0xff)		// The less-significant byte
+	wav.DataChunk.Data[n + 3] = byte(right >> 8)		// The more-significant byte
 }
 
 func (wav WAV) Get(frame uint32) (int16, int16) {
@@ -198,14 +196,12 @@ func Load(filename string) (WAV, error) {
 	var got_fmt, got_data bool
 
 	infile, err = os.Open(filename)
+	if infile != nil {
+		defer infile.Close()
+	}
 	if err != nil {
-		if infile != nil {
-			infile.Close()
-		}
 		return wav, fmt.Errorf("load_wav() couldn't load '%s': %v", filename, err)
 	}
-
-	defer infile.Close()
 
 	// --------------------
 
@@ -268,6 +264,8 @@ func Load(filename string) (WAV, error) {
 			break
 		}
 	}
+
+	// --------------------
 
 	err = wav_error(wav)
 	if err != nil {
