@@ -30,6 +30,7 @@ type DataChunk_Struct struct {
 
 var have_warned_get_out_of_bounds bool = false
 var have_warned_set_out_of_bounds bool = false
+var have_warned_clipping bool = false
 
 
 // ------------------------------------- EXPOSED METHODS
@@ -206,6 +207,8 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 	s := s_loc
 	frames_added := uint32(0)
 
+	var clipped bool = false
+
 	for {
 		if t >= target.FrameCount() {
 			break
@@ -220,10 +223,10 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 		new_left_32  := int32(target_left)  + int32(source_left)
 		new_right_32 := int32(target_right) + int32(source_right)
 
-		if new_left_32  < -32768 { new_left_32  = -32768 }
-		if new_left_32  >  32767 { new_left_32  =  32767 }
-		if new_right_32 < -32768 { new_right_32 = -32768 }
-		if new_right_32 >  32767 { new_right_32 =  32767 }
+		if new_left_32  < -32768 { new_left_32  = -32768 ; clipped = true }
+		if new_left_32  >  32767 { new_left_32  =  32767 ; clipped = true }
+		if new_right_32 < -32768 { new_right_32 = -32768 ; clipped = true }
+		if new_right_32 >  32767 { new_right_32 =  32767 ; clipped = true }
 
 		new_left  := int16(new_left_32)
 		new_right := int16(new_right_32)
@@ -237,6 +240,11 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 		if frames_added >= frames {
 			break
 		}
+	}
+
+	if clipped == true && have_warned_clipping == false {
+		have_warned_clipping = true
+		fmt.Fprintf(os.Stderr, "Warning: clipping occurred in Add(). No further such warnings shall be given.\n")
 	}
 }
 
@@ -257,7 +265,7 @@ func (wav *WAV) FadeSamples(frames_to_fade uint32) {
 		frames_to_fade = total_frames
 	}
 
-	for n := total_frames - 1 ; n > total_frames - frames_to_fade ; n-- {	//	Use > not >= because of uint wrap-around
+	for n := total_frames - 1 ; n > total_frames - frames_to_fade ; n-- {	// Use > not >= because of uint wrap-around
 
 		multiplier := float64(total_frames - n) / float64(frames_to_fade)
 
