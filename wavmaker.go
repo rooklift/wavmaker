@@ -253,7 +253,7 @@ func (wav *WAV) FadeSamples(frames_to_fade uint32) {
 		frames_to_fade = total_frames
 	}
 
-	for n := total_frames - 1 ; n >= total_frames - frames_to_fade ; n-- {
+	for n := total_frames - 1 ; n > total_frames - frames_to_fade ; n-- {	//	Use > not >= because of uint wrap-around
 
 		multiplier := float64(total_frames - n) / float64(frames_to_fade)
 
