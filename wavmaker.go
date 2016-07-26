@@ -242,7 +242,7 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 
 
 func (wav *WAV) Fade(fraction float64) {		// Fade out the last portion, i.e. an argument of 0.25 fades out the final 25%
-	if fraction < 0 {
+	if fraction <= 0 {
 		return
 	}
 
