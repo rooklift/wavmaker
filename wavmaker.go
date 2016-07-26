@@ -253,7 +253,7 @@ func (wav *WAV) FadeSamples(frames_to_fade uint32) {
 		frames_to_fade = total_frames
 	}
 
-	for n := total_frames - 1 ; n > total_frames - frames_to_fade ; n-- {
+	for n := total_frames - 1 ; n >= total_frames - frames_to_fade ; n-- {
 
 		multiplier := float64(total_frames - n) / float64(frames_to_fade)
 
@@ -284,7 +284,6 @@ func (wav *WAV) FadeFraction(fraction float64) {		// e.g. an argument of 0.25 fa
 
 	wav.FadeSamples(frames_to_fade)
 }
-
 
 
 // ------------------------------------- EXPOSED FUNCTIONS
