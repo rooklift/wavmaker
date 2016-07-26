@@ -473,6 +473,9 @@ func load_data(infile *os.File) (DataChunk_Struct, error) {
 
 func (wav *WAV) convert(filename string) error {		// Filename given just for printing useful info
 
+	// Remember, this is an in-place conversion, we can't just set *wav ptr to be something else.
+	// Rather, the struct that *wav points to itself needs to be modified.
+
 	// We want 16-bit audio:
 
 	if wav.FmtChunk.BitsPerSample != 16 {
@@ -541,7 +544,7 @@ func (wav *WAV) convert(filename string) error {		// Filename given just for pri
 		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
 		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz ", filename, PREFERRED_FREQ)
 		fmt.Fprintf(os.Stderr, " (%d -> %d frames)...\n", wav.FrameCount(), new_frame_count)
-		wav = wav.Stretched(new_frame_count)
+		*wav = *wav.Stretched(new_frame_count)
 	}
 
 	// Final sanity check:
