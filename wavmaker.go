@@ -201,7 +201,7 @@ func (wav *WAV) Get(frame uint32) (int16, int16) {
 }
 
 
-func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
+func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64) {
 
 	t := t_loc
 	s := s_loc
@@ -220,8 +220,15 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 		target_left, target_right := target.Get(t)
 		source_left, source_right := source.Get(s)
 
-		new_left_32  := int32(target_left)  + int32(source_left)
-		new_right_32 := int32(target_right) + int32(source_right)
+		var new_left_32, new_right_32 int32
+		
+		if volume == 1.0 {
+			new_left_32  = int32(target_left)  + int32(source_left)
+			new_right_32 = int32(target_right) + int32(source_right)
+		} else {
+			new_left_32  = int32(target_left)  + int32(float64(source_left) * volume)
+			new_right_32 = int32(target_right) + int32(float64(source_right) * volume)
+		}
 
 		if new_left_32  < -32768 { new_left_32  = -32768 ; clipped = true }
 		if new_left_32  >  32767 { new_left_32  =  32767 ; clipped = true }
