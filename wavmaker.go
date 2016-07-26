@@ -241,18 +241,17 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32) {
 }
 
 
-func (wav *WAV) Fade(fraction float64) {		// Fade out the last portion, i.e. an argument of 0.25 fades out the final 25%
-	if fraction <= 0 {
-		return
-	}
+func (wav *WAV) FadeSamples(frames_to_fade uint32) {
 
-	if fraction > 1 {
-		fraction = 1
+	if frames_to_fade <= 0 {
+		return
 	}
 
 	total_frames := wav.FrameCount()
 
-	frames_to_fade := uint32 (float64(total_frames) * fraction)
+	if frames_to_fade > total_frames {
+		frames_to_fade = total_frames
+	}
 
 	for n := total_frames - 1 ; n > total_frames - frames_to_fade ; n-- {
 
@@ -269,6 +268,24 @@ func (wav *WAV) Fade(fraction float64) {		// Fade out the last portion, i.e. an 
 		wav.Set(n, new_left, new_right)
 	}
 }
+
+
+func (wav *WAV) FadeFraction(fraction float64) {		// e.g. an argument of 0.25 fades out the final 25%
+
+	if fraction <= 0 {
+		return
+	}
+	if fraction > 1 {
+		fraction = 1
+	}
+
+	total_frames := wav.FrameCount()
+	frames_to_fade := uint32(float64(total_frames) * fraction)
+
+	wav.FadeSamples(frames_to_fade)
+}
+
+
 
 // ------------------------------------- EXPOSED FUNCTIONS
 
