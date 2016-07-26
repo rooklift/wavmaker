@@ -249,6 +249,10 @@ func (wav *WAV) FadeSamples(frames_to_fade uint32) {
 
 	total_frames := wav.FrameCount()
 
+	if total_frames < 2 {
+		return
+	}
+
 	if frames_to_fade > total_frames {
 		frames_to_fade = total_frames
 	}
