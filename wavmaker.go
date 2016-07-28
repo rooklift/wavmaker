@@ -201,7 +201,11 @@ func (wav *WAV) Get(frame uint32) (int16, int16) {
 }
 
 
-func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64) {
+func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64, fadeout uint32) {
+
+	// This function adds the source wav to the target, with various options. It is highly relevant to my related
+	// Trackmaker project, and indeed perhaps includes too much logic specific to that. If things get out of hand,
+	// it should just be moved into that project, and a simplified feature-reduced version placed here.
 
 	t := t_loc
 	s := s_loc
@@ -220,8 +224,16 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, v
 		target_left, target_right := target.Get(t)
 		source_left, source_right := source.Get(s)
 
+		frames_to_go := frames - frames_added
+		if frames_to_go < fadeout {
+			fade_multiplier := float64(frames_to_go) / float64(fadeout)
+
+			source_left  = int16(fade_multiplier * float64(source_left))
+			source_right = int16(fade_multiplier * float64(source_right))
+		}
+
 		var new_left_32, new_right_32 int32
-		
+
 		if volume == 1.0 {
 			new_left_32  = int32(target_left)  + int32(source_left)
 			new_right_32 = int32(target_right) + int32(source_right)
