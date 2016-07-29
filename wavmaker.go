@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
 )
 
 const PREFERRED_FREQ = 44100
@@ -590,28 +591,35 @@ func (wav *WAV) convert(filename string) error {		// Filename given just for pri
 
 func (wav *WAV) sanitycheck() error {
 
+	s := make([]string, 0)
+
 	if wav.FmtChunk.Size != 16 {
-		return fmt.Errorf("sanitycheck(): fmt chunk size != 16")
+		s = append(s, "fmt chunk size != 16")
 	}
 
 	if wav.FmtChunk.AudioFormat != 1 {
-		return fmt.Errorf("sanitycheck(): audio format != 1 (PCM)")
+		s = append(s, "audio format != 1 (PCM)")
 	}
 
 	if wav.FmtChunk.NumChannels > 2 {
-		return fmt.Errorf("sanitycheck(): num channels > 2")
+		s = append(s, "num channels > 2")
 	}
 
 	if wav.FmtChunk.ByteRate != wav.FmtChunk.SampleRate * uint32(wav.FmtChunk.NumChannels) * uint32(wav.FmtChunk.BitsPerSample) / 8 {
-		return fmt.Errorf("sanitycheck(): byte rate did not match other fmt fields")
+		s = append(s, "byte rate did not match other fmt fields")
 	}
 
 	if wav.FmtChunk.BlockAlign != wav.FmtChunk.NumChannels * wav.FmtChunk.BitsPerSample / 8 {
-		return fmt.Errorf("sanitycheck(): block align did not match other fmt fields")
+		s = append(s, "block align did not match other fmt fields")
 	}
 
 	if wav.DataChunk.Size != uint32(len(wav.DataChunk.Data)) {
-		return fmt.Errorf("sanitycheck(): data chunk size did not match amount of data read")
+		s = append(s, "data chunk size did not match amount of data read")
+	}
+
+	if len(s) > 0 {
+		msg := "sanitycheck(): " + strings.Join(s, ", ")
+		return fmt.Errorf("%v", msg)
 	}
 
 	return nil
