@@ -37,6 +37,18 @@ var have_warned_clipping bool = false
 // ------------------------------------- EXPOSED METHODS
 
 
+func (wav *WAV) String() string {
+	length := float64(wav.FrameCount()) / float64(wav.FmtChunk.SampleRate)
+	return fmt.Sprintf("<WAV: %d channel, %d bit, %d Hz, %d frames, %.2f seconds>",
+		wav.FmtChunk.NumChannels,
+		wav.FmtChunk.BitsPerSample,
+		wav.FmtChunk.SampleRate,
+		wav.FrameCount(),
+		length,
+	)
+}
+
+
 func (wav *WAV) FrameCount() uint32 {
 	return wav.DataChunk.Size / uint32(wav.FmtChunk.BlockAlign)
 }
