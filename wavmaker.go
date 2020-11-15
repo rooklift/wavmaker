@@ -215,6 +215,16 @@ func (wav *WAV) Get(frame uint32) (int16, int16) {
 
 
 func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64, fadeout uint32) {
+	target.Insert(t_loc, source, s_loc, frames, volume, fadeout, false)
+}
+
+
+func (target *WAV) Replace(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64, fadeout uint32) {
+	target.Insert(t_loc, source, s_loc, frames, volume, fadeout, true)
+}
+
+
+func (target *WAV) Insert(t_loc uint32, source *WAV, s_loc uint32, frames uint32, volume float64, fadeout uint32, replacement bool) {
 
 	// This function adds the source wav to the target, with various options. It is highly relevant to my related
 	// Trackmaker project, and indeed perhaps includes too much logic specific to that. If things get out of hand,
@@ -235,7 +245,11 @@ func (target *WAV) Add(t_loc uint32, source *WAV, s_loc uint32, frames uint32, v
 		}
 
 		target_left, target_right := target.Get(t)
-		source_left, source_right := source.Get(s)
+
+		source_left, source_right := int16(0), int16(0)
+		if replacement == false {
+			source_left, source_right = source.Get(s)
+		}
 
 		frames_to_go := frames - frames_added
 		if frames_to_go < fadeout {
