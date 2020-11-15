@@ -244,12 +244,12 @@ func (target *WAV) Insert(t_loc uint32, source *WAV, s_loc uint32, frames uint32
 			break
 		}
 
-		target_left, target_right := target.Get(t)
-
-		source_left, source_right := int16(0), int16(0)
+		target_left, target_right := int16(0), int16(0)
 		if replacement == false {
-			source_left, source_right = source.Get(s)
+			target_left, target_right := target.Get(t)
 		}
+
+		source_left, source_right := source.Get(s)
 
 		frames_to_go := frames - frames_added
 		if frames_to_go < fadeout {
