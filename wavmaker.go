@@ -246,7 +246,7 @@ func (target *WAV) Insert(t_loc uint32, source *WAV, s_loc uint32, frames uint32
 
 		target_left, target_right := int16(0), int16(0)
 		if replacement == false {
-			target_left, target_right := target.Get(t)
+			target_left, target_right = target.Get(t)
 		}
 
 		source_left, source_right := source.Get(s)
