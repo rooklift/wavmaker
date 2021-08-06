@@ -134,8 +134,8 @@ func (wav *WAV) Save(filename string) error {
 	if outfile != nil {
 		defer outfile.Close()
 	}
-    if err != nil {
-        return fmt.Errorf("Couldn't create output file '%s'", filename)
+	if err != nil {
+		return fmt.Errorf("Couldn't create output file '%s'", filename)
 	}
 
 	filesize := 36 + wav.DataChunk.Size
