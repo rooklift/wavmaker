@@ -3,6 +3,7 @@ package wavmaker
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -135,7 +136,7 @@ func (wav *WAV) Save(filename string) error {
 		defer outfile.Close()
 	}
 	if err != nil {
-		return fmt.Errorf("Couldn't create output file '%s'", filename)
+		return fmt.Errorf("Couldn't create output file '%s': %v", filename, err)
 	}
 
 	filesize := 36 + wav.DataChunk.Size
@@ -145,20 +146,32 @@ func (wav *WAV) Save(filename string) error {
 
 	bo := binary.LittleEndian
 
-	binary.Write(outfile, bo, []byte("RIFF"))
-	binary.Write(outfile, bo, &filesize)
-	binary.Write(outfile, bo, []byte("WAVE"))
-	binary.Write(outfile, bo, []byte("fmt "))
-	binary.Write(outfile, bo, &wav.FmtChunk.Size)
-	binary.Write(outfile, bo, &wav.FmtChunk.AudioFormat)
-	binary.Write(outfile, bo, &wav.FmtChunk.NumChannels)
-	binary.Write(outfile, bo, &wav.FmtChunk.SampleRate)
-	binary.Write(outfile, bo, &wav.FmtChunk.ByteRate)
-	binary.Write(outfile, bo, &wav.FmtChunk.BlockAlign)
-	binary.Write(outfile, bo, &wav.FmtChunk.BitsPerSample)
-	binary.Write(outfile, bo, []byte("data"))
-	binary.Write(outfile, bo, &wav.DataChunk.Size)
-	binary.Write(outfile, bo, wav.DataChunk.Data)
+	var write_err error
+
+	write := func(data interface{}) {
+		if write_err == nil {
+			write_err = binary.Write(outfile, bo, data)
+		}
+	}
+
+	write([]byte("RIFF"))
+	write(&filesize)
+	write([]byte("WAVE"))
+	write([]byte("fmt "))
+	write(&wav.FmtChunk.Size)
+	write(&wav.FmtChunk.AudioFormat)
+	write(&wav.FmtChunk.NumChannels)
+	write(&wav.FmtChunk.SampleRate)
+	write(&wav.FmtChunk.ByteRate)
+	write(&wav.FmtChunk.BlockAlign)
+	write(&wav.FmtChunk.BitsPerSample)
+	write([]byte("data"))
+	write(&wav.DataChunk.Size)
+	write(wav.DataChunk.Data)
+
+	if write_err != nil {
+		return fmt.Errorf("Couldn't write to output file '%s': %v", filename, write_err)
+	}
 
 	err = wav.sanitycheck()
 	if err != nil {
@@ -503,6 +516,20 @@ func load_fmt(infile *os.File) (FmtChunk_Struct, error) {
 		return chunk, fmt.Errorf("load_fmt() couldn't read fmt chunk: %v", err)
 	}
 
+	// Some common variants (e.g. from ffmpeg or sox) have an 18 or 40 byte fmt chunk,
+	// where the extra bytes are an extension we don't care about. Skip past them, and
+	// normalise the recorded size to 16 so the rest of the code is happy.
+
+	if chunk.Size > 16 {
+		_, err = infile.Seek(int64(chunk.Size - 16), io.SeekCurrent)
+		if err != nil {
+			return chunk, fmt.Errorf("load_fmt() couldn't skip fmt chunk extension: %v", err)
+		}
+		chunk.Size = 16
+	} else if chunk.Size < 16 {
+		return chunk, fmt.Errorf("load_fmt() fmt chunk size was %d (expected 16 or more)", chunk.Size)
+	}
+
 	return chunk, nil
 }
 
@@ -601,7 +628,7 @@ func (wav *WAV) convert(filename string) error {		// Filename given just for pri
 
 	if wav.FmtChunk.SampleRate != PREFERRED_FREQ {
 
-		new_frame_count := wav.FrameCount() * PREFERRED_FREQ / wav.FmtChunk.SampleRate
+		new_frame_count := uint32(uint64(wav.FrameCount()) * PREFERRED_FREQ / uint64(wav.FmtChunk.SampleRate))
 		fmt.Fprintf(os.Stderr, "Converting '%s' to %d Hz ", filename, PREFERRED_FREQ)
 		fmt.Fprintf(os.Stderr, " (%d -> %d frames)...\n", wav.FrameCount(), new_frame_count)
 		*wav = *wav.Stretched(new_frame_count)
