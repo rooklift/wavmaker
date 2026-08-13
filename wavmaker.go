@@ -82,19 +82,34 @@ func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 	}
 
 	new_wav := New(new_frame_count)
+	original_frame_count := original.FrameCount()
 
-	if new_frame_count < 2 || original.FrameCount() == 0 {
+	if new_frame_count == 0 || original_frame_count == 0 {
+		return new_wav
+	}
+
+	// With only one frame at either end, there is no interval to interpolate. Preserve the first sample.
+	if new_frame_count == 1 {
+		left, right := original.Get(0)
+		new_wav.Set(0, left, right)
+		return new_wav
+	}
+	if original_frame_count == 1 {
+		left, right := original.Get(0)
+		for n := uint32(0); n < new_frame_count; n++ {
+			new_wav.Set(n, left, right)
+		}
 		return new_wav
 	}
 
 	// Set the final frame directly...
 
-	left, right := original.Get(original.FrameCount() - 1)
+	left, right := original.Get(original_frame_count - 1)
 	new_wav.Set(new_frame_count - 1, left, right)
 
 	for n := uint32(0) ; n <= new_frame_count - 2 ; n++ {
 
-		index_f := (float64(n) / float64(new_frame_count - 1)) * float64(original.FrameCount() - 1)
+		index_f := (float64(n) / float64(new_frame_count - 1)) * float64(original_frame_count - 1)
 		index := uint32(index_f)
 
 		interpolate_fraction := index_f - float64(index)
@@ -102,11 +117,12 @@ func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 		old_val_left,      old_val_right      := original.Get(index)
 		old_val_left_next, old_val_right_next := original.Get(index + 1)
 
-		diff_left  := old_val_left_next  - old_val_left
-		diff_right := old_val_right_next - old_val_right
-
-		new_val_left_f  := float64(old_val_left)  + float64(diff_left)  * interpolate_fraction
-		new_val_right_f := float64(old_val_right) + float64(diff_right) * interpolate_fraction
+		// Convert before subtracting. Subtracting two int16 samples can
+		// overflow even though the interpolated result remains in range.
+		new_val_left_f := float64(old_val_left) +
+			(float64(old_val_left_next) - float64(old_val_left)) * interpolate_fraction
+		new_val_right_f := float64(old_val_right) +
+			(float64(old_val_right_next) - float64(old_val_right)) * interpolate_fraction
 
 		new_val_left  := int16(new_val_left_f)
 		new_val_right := int16(new_val_right_f)
