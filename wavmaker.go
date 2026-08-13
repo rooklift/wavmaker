@@ -82,7 +82,7 @@ func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 
 	new_wav := New(new_frame_count)
 
-	if new_frame_count == 0 {
+	if new_frame_count < 2 || original.FrameCount() == 0 {
 		return new_wav
 	}
 
@@ -229,6 +229,10 @@ func (target *WAV) Insert(t_loc uint32, source *WAV, s_loc uint32, frames uint32
 	// This function adds the source wav to the target, with various options. It is highly relevant to my related
 	// Trackmaker project, and indeed perhaps includes too much logic specific to that. If things get out of hand,
 	// it should just be moved into that project, and a simplified feature-reduced version placed here.
+
+	if frames == 0 {
+		return
+	}
 
 	t := t_loc
 	s := s_loc
@@ -508,8 +512,7 @@ func load_data(infile *os.File) (DataChunk_Struct, error) {
 	var chunk DataChunk_Struct
 	var err error
 
-	binary.Read(infile, binary.LittleEndian, &chunk.Size)
-	err = binary.Read(infile, binary.LittleEndian, chunk.Data)
+	err = binary.Read(infile, binary.LittleEndian, &chunk.Size)
 	if err != nil {
 		return chunk, fmt.Errorf("load_data() couldn't read chunk size: %v", err)
 	}
