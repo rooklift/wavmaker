@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 )
@@ -74,9 +75,6 @@ func (wav *WAV) Copy() *WAV {
 
 func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 
-	// This uses linear interpolation to do the stretching or
-	// squashing, which sound techies don't recommend as it's lossy.
-
 	if new_frame_count == original.FrameCount() {
 		return original.Copy()
 	}
@@ -102,32 +100,43 @@ func (original *WAV) Stretched(new_frame_count uint32) *WAV {
 		return new_wav
 	}
 
-	// Set the final frame directly...
+	// Treat the operation as resampling rather than time stretching. Keeping
+	// the sample rate unchanged deliberately changes both duration and pitch.
+	// A Lanczos-windowed sinc retains considerably more high-frequency detail
+	// than linear interpolation. When reducing the frame count, cutoff also
+	// acts as an anti-aliasing low-pass filter.
+	step := float64(original_frame_count - 1) / float64(new_frame_count - 1)
+	cutoff := math.Min(1, 1 / step)
+	const lobes = 16.0
+	support := lobes / cutoff
 
-	left, right := original.Get(original_frame_count - 1)
-	new_wav.Set(new_frame_count - 1, left, right)
+	for n := uint32(0); n < new_frame_count; n++ {
+		position := float64(n) * step
+		first := int64(math.Ceil(position - support))
+		last := int64(math.Floor(position + support))
+		if first < 0 {
+			first = 0
+		}
+		if last >= int64(original_frame_count) {
+			last = int64(original_frame_count) - 1
+		}
 
-	for n := uint32(0) ; n <= new_frame_count - 2 ; n++ {
+		var left_sum, right_sum, weight_sum float64
+		for source_frame := first; source_frame <= last; source_frame++ {
+			distance := position - float64(source_frame)
+			weight := cutoff * sinc(cutoff * distance) * sinc(distance / support)
+			left, right := original.Get(uint32(source_frame))
+			left_sum += float64(left) * weight
+			right_sum += float64(right) * weight
+			weight_sum += weight
+		}
 
-		index_f := (float64(n) / float64(new_frame_count - 1)) * float64(original_frame_count - 1)
-		index := uint32(index_f)
-
-		interpolate_fraction := index_f - float64(index)
-
-		old_val_left,      old_val_right      := original.Get(index)
-		old_val_left_next, old_val_right_next := original.Get(index + 1)
-
-		// Convert before subtracting. Subtracting two int16 samples can
-		// overflow even though the interpolated result remains in range.
-		new_val_left_f := float64(old_val_left) +
-			(float64(old_val_left_next) - float64(old_val_left)) * interpolate_fraction
-		new_val_right_f := float64(old_val_right) +
-			(float64(old_val_right_next) - float64(old_val_right)) * interpolate_fraction
-
-		new_val_left  := int16(new_val_left_f)
-		new_val_right := int16(new_val_right_f)
-
-		new_wav.Set(n, new_val_left, new_val_right)
+		// Normalising the truncated kernel avoids a volume dip at the ends.
+		if math.Abs(weight_sum) > 1e-12 {
+			left_sum /= weight_sum
+			right_sum /= weight_sum
+		}
+		new_wav.Set(n, sample_from_float(left_sum), sample_from_float(right_sum))
 	}
 
 	return new_wav
@@ -568,6 +577,27 @@ func load_data(infile *os.File) (DataChunk_Struct, error) {
 	}
 
 	return chunk, nil
+}
+
+
+func sinc(x float64) float64 {
+	if math.Abs(x) < 1e-12 {
+		return 1
+	}
+	x *= math.Pi
+	return math.Sin(x) / x
+}
+
+
+func sample_from_float(sample float64) int16 {
+	sample = math.Round(sample)
+	if sample > math.MaxInt16 {
+		return math.MaxInt16
+	}
+	if sample < math.MinInt16 {
+		return math.MinInt16
+	}
+	return int16(sample)
 }
 
 
